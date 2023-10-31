@@ -2,6 +2,7 @@
 // supress warning for `dotenv().ok()` only being used in non-test code
 use dotenv::dotenv;
 use std::env;
+use url::form_urlencoded::byte_serialize;
 
 #[derive(Debug, PartialEq)]
 struct StravaConfig {
@@ -40,13 +41,32 @@ fn load_env_variables() -> Result<StravaConfig, &'static str> {
     })
 }
 
+fn build_auth_url(config: &StravaConfig) -> String {
+    let encoded_redirect_uri = byte_serialize("http://localhost/".as_bytes()).collect::<String>();
+    let url = format!("https://www.strava.com/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&scope=read,activity:read,activity:write", config.client_id, encoded_redirect_uri);
+    url
+
+    // def build_auth_url(client_id: str, redirect_uri: str) -> str:
+    // params = {
+    //     "client_id": client_id,
+    //     "redirect_uri": redirect_uri,
+    //     "response_type": "code",
+    //     "scope": "read,activity:read,activity:write",
+    // }
+    // return f"https://www.strava.com/oauth/authorize?{urlencode(params)}"
+}
+
 fn main() {
     let config = load_env_variables().unwrap();
     println!("{:?}", config);
+    if config.refresh_token.is_none() {
+        let auth_url = build_auth_url(&config);
+        println!("{}", auth_url);
+    }
 }
 
 #[cfg(test)]
-mod tests {
+mod load_env_variables_tests {
     use super::*;
     use serial_test::serial;
     use std::env;
@@ -122,5 +142,29 @@ mod tests {
         };
 
         assert_eq!(load_env_variables().unwrap(), expected);
+    }
+}
+
+#[cfg(test)]
+mod build_auth_url_tests {
+    use super::*;
+    use url::form_urlencoded::byte_serialize;
+
+    #[test]
+    fn test_build_auth_url() {
+        let client_id: u32 = 123456;
+
+        let config = StravaConfig {
+            client_id: client_id,
+            client_secret: "dummy_secret".to_string(),
+            refresh_token: None,
+        };
+
+        let encoded_redirect_uri =
+            byte_serialize("http://localhost/".as_bytes()).collect::<String>();
+
+        let expected_url = format!("https://www.strava.com/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&scope=read,activity:read,activity:write", client_id, encoded_redirect_uri);
+        let actual_url = build_auth_url(&config);
+        assert_eq!(expected_url, actual_url);
     }
 }
