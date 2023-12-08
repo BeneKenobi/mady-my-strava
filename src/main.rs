@@ -1,12 +1,12 @@
 #[allow(unused_imports)]
 // supress warning for `dotenv().ok()` only being used in non-test code
 use dotenv::dotenv;
-use std::env;
-use urlencoding::encode;
-use serde::Deserialize;
 use reqwest::blocking::Client;
-use url::Url;
+use serde::Deserialize;
 use serde_json;
+use std::env;
+use url::Url;
+use urlencoding::encode;
 
 #[derive(Debug, PartialEq)]
 struct StravaConfig {
@@ -23,10 +23,9 @@ struct StravaConfig {
 struct RefreshResponse {
     refresh_token: String,
     access_token: String,
-    token_type: String, 
+    token_type: String,
     expires_in: u32,
 }
-
 
 fn main() {
     let config = load_env_variables().unwrap();
@@ -82,9 +81,7 @@ fn build_auth_url(config: &StravaConfig) -> String {
     format!("https://www.strava.com/oauth/authorize?client_id={}&redirect_uri={}&response_type=code&scope=read,activity:read,activity:write", &config.client_id, encoded_redirect_uri)
 }
 
-fn refresh_strava_token(
-    config: &StravaConfig,
-) -> StravaConfig {
+fn refresh_strava_token(config: &StravaConfig) -> StravaConfig {
     let url = match Url::parse(format!("{}/oauth/token", config.strava_url).as_str()) {
         Ok(url) => url,
         Err(e) => panic!("Failed to parse Strava URL: {}", e),
@@ -97,7 +94,7 @@ fn refresh_strava_token(
     ];
 
     let client = Client::new();
-    let response = match client.post(url).form(&data).send(){
+    let response = match client.post(url).form(&data).send() {
         Ok(response) => response,
         Err(e) => panic!("Failed to send request: {}", e),
     };
@@ -111,14 +108,14 @@ fn refresh_strava_token(
             Ok(json) => json,
             Err(e) => panic!("Failed to parse JSON: {}", e),
         };
-            StravaConfig {
-                client_id: config.client_id,
-                client_secret: config.client_secret.clone(),
-                refresh_token: Some(json.refresh_token),
-                redirect_uri: config.redirect_uri.clone(),
-                access_token: Some(json.access_token),
-                strava_url: config.strava_url.clone(),
-            }
+        StravaConfig {
+            client_id: config.client_id,
+            client_secret: config.client_secret.clone(),
+            refresh_token: Some(json.refresh_token),
+            redirect_uri: config.redirect_uri.clone(),
+            access_token: Some(json.access_token),
+            strava_url: config.strava_url.clone(),
+        }
     } else {
         panic!("Failed to refresh token: {}", response.status());
     }
@@ -237,16 +234,16 @@ mod build_auth_url_tests {
 mod refresh_strava_token_tests {
     use super::*;
     use mockito::Matcher;
-    
+
     #[test]
     fn test_refresh_strava_token() {
         let client_id: u32 = 123456;
         let client_secret = "dummy_secret".to_string();
         let refresh_token = "dummy_token".to_string();
         let redirect_uri = "http://localhost/".to_string();
-        
+
         let mut server = mockito::Server::new();
-        
+
         let config = StravaConfig {
             client_id: client_id,
             client_secret: client_secret.clone(),
@@ -264,7 +261,6 @@ mod refresh_strava_token_tests {
             access_token: Some("dummy_access_token".to_string()),
             strava_url: server.url(),
         };
-
 
         let mock = server.mock("POST", "/oauth/token")
             .match_header("content-type", "application/x-www-form-urlencoded")
