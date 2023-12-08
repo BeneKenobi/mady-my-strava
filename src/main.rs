@@ -3,7 +3,7 @@
 use dotenv::dotenv;
 use reqwest::blocking::Client;
 use serde::Deserialize;
-use serde_json;
+
 use std::env;
 use url::Url;
 use urlencoding::encode;
@@ -216,7 +216,7 @@ mod build_auth_url_tests {
         let client_id: u32 = 123456;
 
         let config = StravaConfig {
-            client_id: client_id,
+            client_id,
             client_secret: "dummy_secret".to_string(),
             refresh_token: None,
             redirect_uri: "http://localhost/".to_string(),
@@ -245,7 +245,7 @@ mod refresh_strava_token_tests {
         let mut server = mockito::Server::new();
 
         let config = StravaConfig {
-            client_id: client_id,
+            client_id,
             client_secret: client_secret.clone(),
             refresh_token: Some(refresh_token.clone()),
             redirect_uri: redirect_uri.clone(),
@@ -254,7 +254,7 @@ mod refresh_strava_token_tests {
         };
 
         let expected = StravaConfig {
-            client_id: client_id,
+            client_id,
             client_secret: client_secret.clone(),
             refresh_token: Some(refresh_token.clone()),
             redirect_uri: redirect_uri.clone(),
