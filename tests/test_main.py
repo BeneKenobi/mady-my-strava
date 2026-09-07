@@ -105,10 +105,11 @@ def test_update_activity_sport_type(mock_put: Mock) -> None:
 
     update_activity_sport_type("dummy_token", 4, EBIKE_SPORT_TYPE)
 
+    # Strava only applies the sport type when it arrives as a JSON body.
     mock_put.assert_called_once_with(
         "https://www.strava.com/api/v3/activities/4",
         headers={"Authorization": "Bearer dummy_token"},
-        params={"sport_type": "EBikeRide"},
+        json={"sport_type": "EBikeRide"},
     )
 
 

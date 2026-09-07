@@ -141,9 +141,10 @@ def update_activity_sport_type(
 ) -> None:
     url = f"https://www.strava.com/api/v3/activities/{activity_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
-    params = {"sport_type": sport_type}
 
-    response = requests.put(url, headers=headers, params=params)
+    # Strava answers 200 but keeps the old sport type when this is sent as a
+    # query parameter or form encoded, so the value has to go in a JSON body.
+    response = requests.put(url, headers=headers, json={"sport_type": sport_type})
 
     if response.status_code == 200:
         print(f"Successfully set activity {activity_id} to {sport_type}")
