@@ -21,8 +21,8 @@ BIKE_SPORT_TYPE = "Ride"
 EBIKE_SPORT_TYPE = "EBikeRide"
 # How far back yoga activities are looked at.
 YOGA_LOOKBACK = timedelta(days=3)
-# How far back bike rides are looked at.
-BIKE_LOOKBACK = timedelta(days=1)
+# How far back activities are looked at for a sport type change.
+SPORT_TYPE_LOOKBACK = timedelta(days=1)
 # Tasks an account gets when it comes from the legacy STRAVA_REFRESH_TOKEN key.
 LEGACY_ACCOUNT: Dict[str, Any] = {
     "name": "default",
@@ -113,14 +113,12 @@ def get_yoga_activities(access_token: str, after: int) -> List[Dict[str, Any]]:
     return [activity for activity in activities if activity["type"] == "Yoga"]
 
 
-def get_bike_activities(access_token: str, after: int) -> List[Dict[str, Any]]:
-    """Return the regular bike rides, so neither e-bike nor mountain bike rides."""
-    activities = get_activities(access_token, after)
-    return [
-        activity
-        for activity in activities
-        if activity.get("sport_type") == BIKE_SPORT_TYPE
-    ]
+def get_sport_type_map(account: Dict[str, Any]) -> Dict[str, str]:
+    """Return the sport type changes the account wants, source type to target."""
+    sport_type_map: Dict[str, str] = dict(account.get("sport_type_map", {}))
+    if account.get("force_ebike"):
+        sport_type_map.setdefault(BIKE_SPORT_TYPE, EBIKE_SPORT_TYPE)
+    return sport_type_map
 
 
 def update_activity_name(access_token: str, activity_id: int, new_name: str) -> None:
@@ -158,9 +156,13 @@ def rename_yoga_activities(access_token: str, after: int) -> None:
             update_activity_name(access_token, activity["id"], YOGA_NAME)
 
 
-def convert_rides_to_ebike(access_token: str, after: int) -> None:
-    for activity in get_bike_activities(access_token, after):
-        update_activity_sport_type(access_token, activity["id"], EBIKE_SPORT_TYPE)
+def convert_sport_types(
+    access_token: str, after: int, sport_type_map: Dict[str, str]
+) -> None:
+    for activity in get_activities(access_token, after):
+        target_sport_type = sport_type_map.get(activity.get("sport_type", ""))
+        if target_sport_type:
+            update_activity_sport_type(access_token, activity["id"], target_sport_type)
 
 
 def process_account(
@@ -187,8 +189,13 @@ def process_account(
     if account.get("rename_yoga"):
         rename_yoga_activities(access_token, int((now - YOGA_LOOKBACK).timestamp()))
 
-    if account.get("force_ebike"):
-        convert_rides_to_ebike(access_token, int((now - BIKE_LOOKBACK).timestamp()))
+    sport_type_map = get_sport_type_map(account)
+    if sport_type_map:
+        convert_sport_types(
+            access_token,
+            int((now - SPORT_TYPE_LOOKBACK).timestamp()),
+            sport_type_map,
+        )
 
     return {
         **account,

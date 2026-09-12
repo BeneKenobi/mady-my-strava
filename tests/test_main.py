@@ -5,7 +5,8 @@ from unittest.mock import Mock, patch
 from src.madymystrava.main import (
     EBIKE_SPORT_TYPE,
     build_auth_url,
-    get_bike_activities,
+    convert_sport_types,
+    get_sport_type_map,
     get_yoga_activities,
     load_accounts,
     process_account,
@@ -26,6 +27,12 @@ sample_activities_response: str = json.dumps(
             "name": "Trail Ride",
             "type": "Ride",
             "sport_type": "MountainBikeRide",
+        },
+        {
+            "id": 7,
+            "name": "Lunch Pickleball",
+            "type": "Workout",
+            "sport_type": "Pickleball",
         },
     ]
 )
@@ -77,23 +84,57 @@ sample_sport_type_update_response: str = json.dumps(
 )
 
 
+def test_get_sport_type_map_from_flag() -> None:
+    assert get_sport_type_map({"force_ebike": True}) == {"Ride": "EBikeRide"}
+
+
+def test_get_sport_type_map_combines_flag_and_map() -> None:
+    account = {"force_ebike": True, "sport_type_map": {"Pickleball": "Padel"}}
+
+    assert get_sport_type_map(account) == {
+        "Pickleball": "Padel",
+        "Ride": "EBikeRide",
+    }
+
+
+def test_get_sport_type_map_without_tasks() -> None:
+    assert get_sport_type_map({"name": "bene"}) == {}
+
+
+@patch("src.madymystrava.main.update_activity_sport_type")
 @patch("requests.get")
-def test_get_bike_activities(mock_get: Mock) -> None:
+def test_convert_sport_types(mock_get: Mock, mock_update: Mock) -> None:
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = json.loads(sample_activities_response)
 
-    activities: List[Dict[str, Any]] = get_bike_activities("dummy_token", 12345)
-    # Only the regular ride counts, not the e-bike and not the mountain bike ride.
-    assert len(activities) == 1
-    assert activities[0]["id"] == 4
+    convert_sport_types("dummy_token", 12345, {"Ride": "EBikeRide"})
+
+    # Only the regular ride changes, not the e-bike and not the mountain bike ride.
+    mock_update.assert_called_once_with("dummy_token", 4, "EBikeRide")
 
 
+@patch("src.madymystrava.main.update_activity_sport_type")
 @patch("requests.get")
-def test_get_bike_activities_on_error(mock_get: Mock) -> None:
+def test_convert_sport_types_pickleball_to_padel(
+    mock_get: Mock, mock_update: Mock
+) -> None:
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = json.loads(sample_activities_response)
+
+    convert_sport_types("dummy_token", 12345, {"Pickleball": "Padel"})
+
+    mock_update.assert_called_once_with("dummy_token", 7, "Padel")
+
+
+@patch("src.madymystrava.main.update_activity_sport_type")
+@patch("requests.get")
+def test_convert_sport_types_on_error(mock_get: Mock, mock_update: Mock) -> None:
     mock_get.return_value.status_code = 401
     mock_get.return_value.json.return_value = {"message": "Authorization Error"}
 
-    assert get_bike_activities("dummy_token", 12345) == []
+    convert_sport_types("dummy_token", 12345, {"Ride": "EBikeRide"})
+
+    mock_update.assert_not_called()
 
 
 @patch("requests.put")
@@ -159,7 +200,7 @@ def test_load_accounts_without_configuration() -> None:
     assert load_accounts() == []
 
 
-@patch("src.madymystrava.main.convert_rides_to_ebike")
+@patch("src.madymystrava.main.convert_sport_types")
 @patch("src.madymystrava.main.rename_yoga_activities")
 @patch("src.madymystrava.main.refresh_strava_token")
 def test_process_account_runs_only_the_wanted_tasks(
@@ -181,11 +222,12 @@ def test_process_account_runs_only_the_wanted_tasks(
     mock_rename_yoga.assert_not_called()
     mock_convert_rides.assert_called_once()
     assert mock_convert_rides.call_args[0][0] == "dummy_access_token"
+    assert mock_convert_rides.call_args[0][2] == {"Ride": "EBikeRide"}
     # The rotated refresh token is handed back, so it can be stored.
     assert updated_account["refresh_token"] == "rotated_token"
 
 
-@patch("src.madymystrava.main.convert_rides_to_ebike")
+@patch("src.madymystrava.main.convert_sport_types")
 @patch("src.madymystrava.main.rename_yoga_activities")
 @patch("src.madymystrava.main.refresh_strava_token")
 def test_process_account_without_access_token(
@@ -199,7 +241,7 @@ def test_process_account_without_access_token(
     mock_convert_rides.assert_not_called()
 
 
-@patch("src.madymystrava.main.convert_rides_to_ebike")
+@patch("src.madymystrava.main.convert_sport_types")
 @patch("src.madymystrava.main.refresh_strava_token")
 def test_process_account_uses_own_credentials(
     mock_refresh: Mock, mock_convert_rides: Mock
@@ -220,3 +262,27 @@ def test_process_account_uses_own_credentials(
 
     mock_refresh.assert_called_once_with("654321", "mady_secret", "mady_token")
     mock_convert_rides.assert_called_once()
+
+
+@patch("src.madymystrava.main.convert_sport_types")
+@patch("src.madymystrava.main.rename_yoga_activities")
+@patch("src.madymystrava.main.refresh_strava_token")
+def test_process_account_runs_both_tasks(
+    mock_refresh: Mock, mock_rename_yoga: Mock, mock_convert_sport_types: Mock
+) -> None:
+    mock_refresh.return_value = {
+        "access_token": "dummy_access_token",
+        "refresh_token": "bene_token",
+    }
+    account = {
+        "name": "bene",
+        "refresh_token": "bene_token",
+        "rename_yoga": True,
+        "sport_type_map": {"Pickleball": "Padel"},
+    }
+
+    process_account(account, "12345", "dummy_secret")
+
+    mock_rename_yoga.assert_called_once()
+    mock_convert_sport_types.assert_called_once()
+    assert mock_convert_sport_types.call_args[0][2] == {"Pickleball": "Padel"}
