@@ -19,6 +19,14 @@ YOGA_NAME = "#yogamitmady"
 BIKE_SPORT_TYPE = "Ride"
 # Sport type the regular bike rides are changed to.
 EBIKE_SPORT_TYPE = "EBikeRide"
+# Sport type a converted pickleball activity ends up with.
+PADEL_SPORT_TYPE = "Padel"
+# Sport type of pickleball activities, whose title gets replaced on conversion.
+PICKLEBALL_SPORT_TYPE = "Pickleball"
+# Term that marks a title as pickleball specific, matched case insensitively.
+PICKLEBALL_TITLE_TERM = "pickle"
+# Title a pickleball specific title is replaced with.
+PADEL_TITLE = "Padel"
 # How far back yoga activities are looked at.
 YOGA_LOOKBACK = timedelta(days=3)
 # How far back activities are looked at for a sport type change.
@@ -160,9 +168,23 @@ def convert_sport_types(
     access_token: str, after: int, sport_type_map: Dict[str, str]
 ) -> None:
     for activity in get_activities(access_token, after):
-        target_sport_type = sport_type_map.get(activity.get("sport_type", ""))
-        if target_sport_type:
-            update_activity_sport_type(access_token, activity["id"], target_sport_type)
+        source_sport_type = activity.get("sport_type", "")
+        target_sport_type = sport_type_map.get(source_sport_type)
+        if not target_sport_type:
+            continue
+
+        update_activity_sport_type(access_token, activity["id"], target_sport_type)
+
+        # A title like "Lunch Pickleball" would be wrong once it is a padel game.
+        is_pickleball_title = (
+            PICKLEBALL_TITLE_TERM in str(activity.get("name", "")).lower()
+        )
+        if (
+            source_sport_type == PICKLEBALL_SPORT_TYPE
+            and target_sport_type == PADEL_SPORT_TYPE
+            and is_pickleball_title
+        ):
+            update_activity_name(access_token, activity["id"], PADEL_TITLE)
 
 
 def process_account(

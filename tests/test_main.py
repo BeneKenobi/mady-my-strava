@@ -113,10 +113,11 @@ def test_convert_sport_types(mock_get: Mock, mock_update: Mock) -> None:
     mock_update.assert_called_once_with("dummy_token", 4, "EBikeRide")
 
 
+@patch("src.madymystrava.main.update_activity_name")
 @patch("src.madymystrava.main.update_activity_sport_type")
 @patch("requests.get")
 def test_convert_sport_types_pickleball_to_padel(
-    mock_get: Mock, mock_update: Mock
+    mock_get: Mock, mock_update: Mock, mock_rename: Mock
 ) -> None:
     mock_get.return_value.status_code = 200
     mock_get.return_value.json.return_value = json.loads(sample_activities_response)
@@ -124,6 +125,41 @@ def test_convert_sport_types_pickleball_to_padel(
     convert_sport_types("dummy_token", 12345, {"Pickleball": "Padel"})
 
     mock_update.assert_called_once_with("dummy_token", 7, "Padel")
+    # "Lunch Pickleball" mentions pickle, so the title follows the sport.
+    mock_rename.assert_called_once_with("dummy_token", 7, "Padel")
+
+
+@patch("src.madymystrava.main.update_activity_name")
+@patch("src.madymystrava.main.update_activity_sport_type")
+@patch("requests.get")
+def test_convert_sport_types_keeps_unrelated_pickleball_title(
+    mock_get: Mock, mock_update: Mock, mock_rename: Mock
+) -> None:
+    activities = json.loads(sample_activities_response)
+    activities[-1]["name"] = "Evening game with friends"
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = activities
+
+    convert_sport_types("dummy_token", 12345, {"Pickleball": "Padel"})
+
+    mock_update.assert_called_once_with("dummy_token", 7, "Padel")
+    mock_rename.assert_not_called()
+
+
+@patch("src.madymystrava.main.update_activity_name")
+@patch("src.madymystrava.main.update_activity_sport_type")
+@patch("requests.get")
+def test_convert_sport_types_does_not_rename_other_conversions(
+    mock_get: Mock, mock_update: Mock, mock_rename: Mock
+) -> None:
+    activities = json.loads(sample_activities_response)
+    activities[3]["name"] = "Pickle commute"
+    mock_get.return_value.status_code = 200
+    mock_get.return_value.json.return_value = activities
+
+    convert_sport_types("dummy_token", 12345, {"Ride": "EBikeRide"})
+
+    mock_rename.assert_not_called()
 
 
 @patch("src.madymystrava.main.update_activity_sport_type")
